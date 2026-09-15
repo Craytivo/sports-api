@@ -9,10 +9,8 @@ def clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
 
 
 def regulation_seconds_remaining(state: dict[str, Any]) -> int:
-    quarter = int(state.get("quarter", 1))
-    clock = int(state.get("seconds_remaining", 3600))
-    if quarter >= 5:
-        return 0
+    quarter = int(state.get("quarter", 1)); clock = int(state.get("seconds_remaining", 3600))
+    if quarter >= 5: return 0
     return max(0, min(3600, (4 - quarter) * 900 + clock))
 
 
@@ -21,11 +19,9 @@ def elapsed_seconds(state: dict[str, Any]) -> int:
 
 
 def late_pressure(seconds_remaining: int, quarter: int) -> float:
-    if quarter >= 5:
-        return 100.0
+    if quarter >= 5: return 100.0
     remaining = max(0, min(3600, (4 - quarter) * 900 + seconds_remaining))
-    remaining_ratio = remaining / 3600.0
-    return 100.0 * (1.0 - remaining_ratio) ** 2
+    return 100.0 * (1.0 - remaining / 3600.0) ** 2
 
 
 def margin_competitiveness(diff: int) -> float:
@@ -40,77 +36,51 @@ def recovered_margin(diff: int, late: float) -> float:
 
 
 def close_duration_score(history: dict[str, Any], elapsed: int) -> float:
-    if elapsed <= 0:
-        return 0.0
+    if elapsed <= 0: return 0.0
     return clamp(100.0 * history.get("close_game_seconds", 0) / elapsed)
 
 
-def count_score(n: int) -> float:
-    return clamp(25.0 * n)
+def count_score(n: int) -> float: return clamp(25.0 * n)
 
 
 def competitive_history(history: dict[str, Any]) -> float:
     elapsed = history.get("elapsed_seconds", 1800)
-    return (
-        0.30 * count_score(history.get("lead_changes", 0))
-        + 0.20 * count_score(history.get("ties", 0))
-        + 0.30 * close_duration_score(history, elapsed)
-        + 0.20 * count_score(history.get("comeback_events", 0))
-    )
+    return (0.30 * count_score(history.get("lead_changes", 0)) + 0.20 * count_score(history.get("ties", 0)) + 0.30 * close_duration_score(history, elapsed) + 0.20 * count_score(history.get("comeback_events", 0)))
 
 
 def synthetic_wp(state: dict[str, Any], teams: dict[str, Any]) -> float:
-    """Transparent lab WP approximation; production WP will be provider/model supplied."""
-    if "home_win_probability" in state:
-        return float(state["home_win_probability"])
-
+    if "home_win_probability" in state: return float(state["home_win_probability"])
     diff = state.get("home_score", 0) - state.get("away_score", 0)
-    remaining = regulation_seconds_remaining(state)
-    minutes = remaining / 60.0
+    minutes = regulation_seconds_remaining(state) / 60.0
     scale = max(1.8, 2.5 * (minutes + 1.0) ** 0.55)
     home_logit = float(diff)
-
-    if state.get("possession") == "HOME":
-        home_logit += 1.5
-    elif state.get("possession") == "AWAY":
-        home_logit -= 1.5
-
+    if state.get("possession") == "HOME": home_logit += 1.5
+    elif state.get("possession") == "AWAY": home_logit -= 1.5
     field = state.get("field_position_yards_to_goal")
     if field is not None and state.get("possession") in {"HOME", "AWAY"}:
-        field_bonus = (50.0 - float(field)) / 25.0
-        home_logit += field_bonus if state.get("possession") == "HOME" else -field_bonus
-
-    home_logit += (
-        teams.get("home_strength", 50) - teams.get("away_strength", 50)
-    ) / 35.0
-
+        bonus = (50.0 - float(field)) / 25.0
+        home_logit += bonus if state.get("possession") == "HOME" else -bonus
+    home_logit += (teams.get("home_strength", 50) - teams.get("away_strength", 50)) / 35.0
     if state.get("down") == 4 and state.get("distance") is not None:
-        distance = float(state.get("distance", 10))
-        down_bonus = max(0.0, 1.5 - 0.25 * max(0.0, distance - 1.0))
-        home_logit += down_bonus if state.get("possession") == "HOME" else -down_bonus
-
+        bonus = max(0.0, 1.5 - 0.25 * max(0.0, float(state.get("distance", 10)) - 1.0))
+        home_logit += bonus if state.get("possession") == "HOME" else -bonus
     return 1.0 / (1.0 + math.exp(-home_logit / scale))
 
 
 def trailing_win_probability(state: dict[str, Any], home_wp: float) -> float:
     home, away = state.get("home_score", 0), state.get("away_score", 0)
-    if home > away:
-        return 1.0 - home_wp
-    if away > home:
-        return home_wp
+    if home > away: return 1.0 - home_wp
+    if away > home: return home_wp
     return 0.50
 
 
 def comeback_potential(state: dict[str, Any], home_wp: float) -> float:
     value = 100.0 * trailing_win_probability(state, home_wp)
     field = state.get("field_position_yards_to_goal")
-    if field is not None and state.get("possession") in {"HOME", "AWAY"}:
-        value += (100.0 - float(field)) * 0.15
-    if state.get("down") == 4:
-        value += 10.0
+    if field is not None and state.get("possession") in {"HOME", "AWAY"}: value += (100.0 - float(field)) * 0.15
+    if state.get("down") == 4: value += 10.0
     timeout_key = "home_timeouts" if state.get("possession") == "HOME" else "away_timeouts"
-    if state.get(timeout_key) is not None:
-        value += 3.0 * (state.get(timeout_key) or 0)
+    if state.get(timeout_key) is not None: value += 3.0 * (state.get(timeout_key) or 0)
     return clamp(value)
 
 
@@ -124,8 +94,7 @@ def scoring_action(state: dict[str, Any], events: list[dict[str, Any]], history:
 
 def explosive_play_rate(events: list[dict[str, Any]]) -> float:
     plays = [e for e in events if e.get("type") in {"play", "explosive_play", "pass", "rush"}]
-    if not plays:
-        return 50.0
+    if not plays: return 50.0
     explosive = sum(1 for e in plays if e.get("explosive", False) or e.get("type") == "explosive_play")
     return clamp(100.0 * explosive / len(plays))
 
@@ -144,6 +113,7 @@ def performance_quality(state: dict[str, Any], teams: dict[str, Any]) -> float:
 
 @dataclass(frozen=True)
 class FeatureSnapshot:
+    competitiveness: float
     outcome_uncertainty: float
     late_game_pressure: float
     margin_competitiveness: float
@@ -160,111 +130,36 @@ class FeatureSnapshot:
     recent_score_movement: float
     momentum_swing: float
 
-    def as_dict(self) -> dict[str, float]:
-        return self.__dict__.copy()
+    def as_dict(self) -> dict[str, float]: return self.__dict__.copy()
 
 
 def calculate_features(scenario: dict[str, Any]) -> FeatureSnapshot:
-    state = scenario.get("game_state", {})
-    teams = scenario.get("teams", {})
-    context = scenario.get("context", {})
-    history = scenario.get("history", {})
-    events = scenario.get("events", [])
-
+    state = scenario.get("game_state", {}); teams = scenario.get("teams", {}); context = scenario.get("context", {}); history = scenario.get("history", {}); events = scenario.get("events", [])
     wp = synthetic_wp(state, teams)
     uncertainty = clamp(100 * (1 - 2 * abs(wp - 0.5)))
     margin = margin_competitiveness(state.get("home_score", 0) - state.get("away_score", 0))
     late = late_pressure(state.get("seconds_remaining", 3600), state.get("quarter", 1))
     history_score = competitive_history(history)
     comeback = comeback_potential(state, wp)
-
     field = state.get("field_position_yards_to_goal")
-    threat = 0.0
-    if field is not None and state.get("possession") in {"HOME", "AWAY"}:
-        threat = 100.0 - float(field)
-
+    threat = 0.0 if field is None or state.get("possession") not in {"HOME", "AWAY"} else 100.0 - float(field)
     leverage = late * (0.55 + 0.45 * uncertainty / 100.0)
-    if state.get("down") == 4:
-        leverage = clamp(leverage + 25.0)
-    if field is not None and field <= 20:
-        leverage = clamp(leverage + 20.0)
-
+    if state.get("down") == 4: leverage = clamp(leverage + 25.0)
+    if field is not None and field <= 20: leverage = clamp(leverage + 20.0)
     possession_importance = 100.0 if state.get("possession") in {"HOME", "AWAY"} else 25.0
-    state_pressure = clamp(
-        0.35 * leverage
-        + 0.25 * late
-        + 0.20 * threat
-        + 0.10 * possession_importance
-        + 0.10 * comeback
-    )
-
-    # A final-minute fourth-and-goal is a distinct competitive state: the
-    # current play can immediately decide the game. This is state leverage,
-    # not a team-quality or stakes bonus.
-    if (
-        state.get("down") == 4
-        and field is not None
-        and field <= 5
-        and state.get("seconds_remaining", 3600) <= 30
-    ):
+    state_pressure = clamp(0.35 * leverage + 0.25 * late + 0.20 * threat + 0.10 * possession_importance + 0.10 * comeback)
+    if state.get("down") == 4 and field is not None and field <= 5 and state.get("seconds_remaining", 3600) <= 30:
         state_pressure = clamp(state_pressure + 20.0)
-
-    margin_state = 0.55 * recovered_margin(
-        state.get("home_score", 0) - state.get("away_score", 0), late
-    ) + 0.45 * state_pressure
-
-    competitiveness = clamp(
-        0.45 * uncertainty
-        + 0.25 * (late * (0.25 + 0.75 * uncertainty / 100.0))
-        + 0.20 * margin_state
-        + 0.10 * history_score
-    )
-
+    margin_state = 0.55 * recovered_margin(state.get("home_score", 0) - state.get("away_score", 0), late) + 0.45 * state_pressure
+    competitiveness = clamp(0.45 * uncertainty + 0.25 * (late * (0.25 + 0.75 * uncertainty / 100.0)) + 0.20 * margin_state + 0.10 * history_score)
     avg = (teams.get("home_strength", 50) + teams.get("away_strength", 50)) / 2
     balance = 100 - abs(teams.get("home_strength", 50) - teams.get("away_strength", 50))
     team_quality = clamp(0.70 * avg + 0.30 * balance)
-
-    stage = {
-        "PRESEASON": 15,
-        "REGULAR_SEASON": 35,
-        "WILD_CARD": 75,
-        "DIVISIONAL": 85,
-        "CONFERENCE_CHAMPIONSHIP": 95,
-        "SUPER_BOWL": 100,
-        "NCAA_REGULAR_SEASON": 35,
-        "NCAA_CONFERENCE_CHAMPIONSHIP": 75,
-        "NCAA_PLAYOFF": 90,
-        "NCAA_NATIONAL_CHAMPIONSHIP": 100,
-    }
-    impact = {"NONE": 0, "LOW": 25, "MEDIUM": 55, "HIGH": 100, "UNKNOWN": 35}
-    rivalry = {"NONE": 0, "NOTABLE": 50, "MAJOR": 100}
-    stakes = clamp(
-        0.40 * stage.get(context.get("game_stage", "REGULAR_SEASON"), 35)
-        + 0.40 * impact.get(context.get("playoff_impact", "UNKNOWN"), 35)
-        + 0.15 * rivalry.get(context.get("rivalry", "NONE"), 0)
-        + 0.05 * (100 if context.get("historical_context") not in {None, "NONE"} else 0)
-    )
-    if context.get("game_stage") in {"SUPER_BOWL", "NCAA_NATIONAL_CHAMPIONSHIP"}:
-        stakes = max(stakes, 100.0)
-
+    stage = {"PRESEASON":15,"REGULAR_SEASON":35,"WILD_CARD":75,"DIVISIONAL":85,"CONFERENCE_CHAMPIONSHIP":95,"SUPER_BOWL":100,"NCAA_REGULAR_SEASON":35,"NCAA_CONFERENCE_CHAMPIONSHIP":75,"NCAA_PLAYOFF":90,"NCAA_NATIONAL_CHAMPIONSHIP":100}
+    impact = {"NONE":0,"LOW":25,"MEDIUM":55,"HIGH":100,"UNKNOWN":35}; rivalry = {"NONE":0,"NOTABLE":50,"MAJOR":100}
+    stakes = clamp(0.40 * stage.get(context.get("game_stage", "REGULAR_SEASON"), 35) + 0.40 * impact.get(context.get("playoff_impact", "UNKNOWN"), 35) + 0.15 * rivalry.get(context.get("rivalry", "NONE"), 0) + 0.05 * (100 if context.get("historical_context") not in {None, "NONE"} else 0))
+    if context.get("game_stage") in {"SUPER_BOWL", "NCAA_NATIONAL_CHAMPIONSHIP"}: stakes = max(stakes, 100.0)
     wp_vol = clamp(sum(abs(e.get("wp_change", 0)) for e in events) * 100)
     recent = clamp(sum(e.get("points", 0) for e in events[-3:]) * 8)
     momentum = clamp(wp_vol * 0.6 + recent * 0.4)
-
-    return FeatureSnapshot(
-        uncertainty,
-        late,
-        margin,
-        state_pressure,
-        history_score,
-        comeback,
-        scoring_action(state, events, history),
-        explosive_play_rate(events),
-        high_leverage_event_rate(events, state, history),
-        performance_quality(state, teams),
-        team_quality,
-        stakes,
-        wp_vol,
-        recent,
-        momentum,
-    )
+    return FeatureSnapshot(competitiveness, uncertainty, late, margin, state_pressure, history_score, comeback, scoring_action(state, events, history), explosive_play_rate(events), high_leverage_event_rate(events, state, history), performance_quality(state, teams), team_quality, stakes, wp_vol, recent, momentum)
