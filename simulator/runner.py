@@ -105,3 +105,7 @@ def main() -> int:
     for f in report["failures"]:
         print(f"  - {f.get('id', f.get('scenario_id'))}: {f.get('reason', f.get('name', 'absolute range'))}")
     return 0 if report["summary"]["status"] == "PASS" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
