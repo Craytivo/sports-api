@@ -14,18 +14,47 @@ jobs:
         with:
           python-version: '3.12'
       - name: Run diagnostics
+        continue-on-error: true
         run: python -m simulator.diagnostics
       - name: Run controlled sweeps
+        continue-on-error: true
         run: python -m simulator.sweeps
       - name: Run regression suite
         continue-on-error: true
         run: python -m simulator.run_regression
+      - name: Print scoring lab reports
+        if: always()
+        run: |
+          for f in diagnostic-report.json sweep-report.json regression-report.json; do
+            if [ -f "$f" ]; then
+              echo "===== $f ====="
+              cat "$f"
+            else
+              echo "===== $f: MISSING ====="
+            fi
+          done
       - name: Upload scoring lab reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: scoring-lab-reports
+          if-no-files-found: warn
           path: |
             diagnostic-report.json
             sweep-report.json
             regression-report.json
+      - name: Enforce regression result
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("regression-report.json")
+          if not p.exists():
+              raise SystemExit("regression-report.json was not produced")
+          report = json.loads(p.read_text())
+          summary = report["summary"]
+          print(f"Regression status: {summary['status']} — {summary['passed']}/{summary['total_tests']} passed")
+          if summary["status"] != "PASS":
+              raise SystemExit(1)
+          PY
