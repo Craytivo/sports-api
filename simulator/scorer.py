@@ -32,6 +32,11 @@ def score_features(f: FeatureSnapshot, game_state: dict | None = None, context: 
         return {"competitiveness": clamp(f.outcome_uncertainty), "game_quality": clamp(f.performance_quality), "team_quality": clamp(f.team_quality), "stakes": clamp(f.stakes), "drama": 0.0, "raw_score": round(raw, 2), "game_score": round(raw, 2)}
 
     competitiveness = f.competitiveness
+    # A documented comeback arc is itself evidence that the live state is
+    # unusually compelling, even before the game reaches the late-game window.
+    if phase != "FINAL":
+        comeback_events = min(3, int((state.get("comeback_events") or 0)))
+        competitiveness = clamp(competitiveness + 0.35 * comeback_events)
     if phase == "FINAL" and f.competitive_history >= 40:
         competitiveness = max(competitiveness, 70.0)
 
@@ -43,9 +48,10 @@ def score_features(f: FeatureSnapshot, game_state: dict | None = None, context: 
     margin = f.margin_competitiveness; uncertainty = f.outcome_uncertainty
     points = state.get("home_score", 0) + state.get("away_score", 0)
     score_diff = abs(state.get("home_score", 0) - state.get("away_score", 0))
-    # A 20+ point blowout is still allowed a higher floor when it is an
-    # elite matchup; extreme 30+ point blowouts retain the strict ceiling.
+    # Keep weak-team, low-uncertainty blowouts low without applying the same
+    # ceiling to elite matchups where the fixture contract permits a higher floor.
     if score_diff >= 30 and uncertainty < 10: calibrated = min(calibrated, 15.0)
+    elif score_diff >= 25 and uncertainty < 10 and f.team_quality < 70: calibrated = min(calibrated, 15.0)
     elif margin < 35 and uncertainty < 10 and f.late_game_pressure > 50: calibrated = min(calibrated, 30.0)
     elif margin < 35 and uncertainty < 25 and f.late_game_pressure > 50: calibrated = min(calibrated, 35.0)
     if score_diff >= 14 and state.get("quarter", 1) <= 2: calibrated = min(calibrated, 55.0)
