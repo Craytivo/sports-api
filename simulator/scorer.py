@@ -1,12 +1,13 @@
 from __future__ import annotations
 from .features import FeatureSnapshot, clamp
 
-MODEL_VERSION = "football-lab-v1.7"
+MODEL_VERSION = "football-lab-v1.8"
 
 
 def calibrate(raw: float, competitiveness: float) -> float:
     if raw <= 0: return 0.0
     if competitiveness >= 70: exponent = 0.13
+    elif competitiveness >= 65: exponent = 0.20
     elif competitiveness >= 60: exponent = 0.50
     elif competitiveness >= 55: exponent = 0.40
     else: exponent = 0.85
@@ -14,7 +15,7 @@ def calibrate(raw: float, competitiveness: float) -> float:
 
 
 def pregame_score(f: FeatureSnapshot) -> float:
-    matchup_quality = 100.0 * (f.team_quality / 100.0) ** 1.9
+    matchup_quality = 100.0 * (f.team_quality / 100.0) ** 2.3
     expected_competitiveness = matchup_quality * (0.40 + 0.60 * f.outcome_uncertainty / 100.0)
     # Pregame has no observed performance yet. Use a team-quality-derived
     # expectation instead of the live-game performance baseline.
@@ -49,6 +50,9 @@ def score_features(f: FeatureSnapshot, game_state: dict | None = None, context: 
     if points <= 25 and competitiveness < 90 and f.late_game_pressure > 50: calibrated = min(calibrated, 95.0)
 
     if state.get("down") == 4 and state.get("field_position_yards_to_goal") is not None and state.get("field_position_yards_to_goal") <= 5 and state.get("seconds_remaining", 3600) <= 30:
+        calibrated = clamp(calibrated + 2.0)
+    if state.get("quarter", 1) >= 5:
+        # Overtime raises leverage without making every OT state a 100.
         calibrated = clamp(calibrated + 2.0)
     if context.get("game_stage") in {"SUPER_BOWL", "NCAA_NATIONAL_CHAMPIONSHIP"} and competitiveness >= 70: calibrated = clamp(calibrated + 1.5)
 
