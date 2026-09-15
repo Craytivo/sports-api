@@ -8,6 +8,7 @@ Football Game Score V1 with a frozen scoring contract and provider-neutral produ
 - Frozen Football Game Score V1 reference model
 - Provider-neutral `CanonicalGame` contract
 - ESPN scoreboard adapter for live/pregame/final game state
+- Optional ESPN Power Index team-strength integration
 
 ## Regression harness
 
@@ -25,6 +26,7 @@ The scoring model is frozen after the V1 regression suite passed 47/47. Producti
 provider
   -> SportsProvider
   -> CanonicalGame
+  -> optional TeamRatingsProvider
   -> production.score_game()
   -> Game Score + feature/component breakdown
 ```
@@ -37,19 +39,36 @@ The provider boundary is defined in `production/provider.py`. Provider-specific 
 
 - `NFL`
 - `NCAA_FOOTBALL`
+- score, clock, quarter, possession, down, distance, field position, timeouts, and available win probability from ESPN's scoreboard situation payload
 
 Example:
 
 ```python
 from production.ingestion import GameIngestion
 from production.providers import ESPNProvider
+from production.ratings import ESPNPowerIndexRatingsProvider
 
 provider = ESPNProvider()
-ingestion = GameIngestion(provider)
-games = ingestion.fetch_games("NFL")
+ratings = ESPNPowerIndexRatingsProvider()
+ingestion = GameIngestion(provider, ratings)
+games = ingestion.fetch_games("NFL", season=2026)
 ```
 
-The ESPN adapter currently supplies scoreboard/game-state data. Team strength remains the canonical neutral baseline (`50.0`) until a separate ratings source is integrated; it is intentionally not inferred from provider rank.
+### Team strength / ratings
+
+`production.ratings.ESPNPowerIndexRatingsProvider` reads ESPN's season Power Index endpoint and normalizes the returned team ratings to the canonical `0-100` strength field. This is an input-data transformation only; it does not change the frozen scoring formulas, weights, calibration, or model version.
+
+If a team is missing from the external ratings response, its existing canonical strength is preserved (`50.0` by default).
+
+### Live feed validation
+
+Run against the real ESPN endpoints with:
+
+```bash
+python scripts/validate_espn_live.py
+```
+
+The validator checks both NFL and NCAA Football scoreboard feeds, canonicalizes returned events, and validates the ESPN Power Index ratings range.
 
 ## Architecture rule
 
