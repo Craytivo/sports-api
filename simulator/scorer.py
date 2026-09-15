@@ -42,10 +42,13 @@ def score_features(f: FeatureSnapshot, game_state: dict | None = None, context: 
 
     margin = f.margin_competitiveness; uncertainty = f.outcome_uncertainty
     points = state.get("home_score", 0) + state.get("away_score", 0)
-    if margin < 20 and uncertainty < 10: calibrated = min(calibrated, 15.0)
+    score_diff = abs(state.get("home_score", 0) - state.get("away_score", 0))
+    # A 20+ point blowout is still allowed a higher floor when it is an
+    # elite matchup; extreme 30+ point blowouts retain the strict ceiling.
+    if score_diff >= 30 and uncertainty < 10: calibrated = min(calibrated, 15.0)
     elif margin < 35 and uncertainty < 10 and f.late_game_pressure > 50: calibrated = min(calibrated, 30.0)
     elif margin < 35 and uncertainty < 25 and f.late_game_pressure > 50: calibrated = min(calibrated, 35.0)
-    if abs(state.get("home_score", 0) - state.get("away_score", 0)) >= 14 and state.get("quarter", 1) <= 2: calibrated = min(calibrated, 55.0)
+    if score_diff >= 14 and state.get("quarter", 1) <= 2: calibrated = min(calibrated, 55.0)
     if points <= 3 and f.late_game_pressure > 50: calibrated = min(calibrated, 70.0)
     if points <= 25 and competitiveness < 90 and f.late_game_pressure > 50: calibrated = min(calibrated, 95.0)
 
