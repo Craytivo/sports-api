@@ -1,0 +1,21 @@
+name: Football Scoring Lab
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  scoring-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run diagnostics
+        run: python -m simulator.diagnostics
+      - name: Run controlled sweeps
+        run: python -m simulator.sweeps
+      - name: Run regression suite
+        run: python -m simulator.run_regression
