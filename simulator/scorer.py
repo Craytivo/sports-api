@@ -1,7 +1,7 @@
 from __future__ import annotations
 from .features import FeatureSnapshot, clamp
 
-MODEL_VERSION = "football-lab-v1.4"
+MODEL_VERSION = "football-lab-v1.5"
 
 
 def calibrate(raw: float, competitiveness: float) -> float:
@@ -23,7 +23,6 @@ def pregame_score(f: FeatureSnapshot) -> float:
 
 def score_features(f: FeatureSnapshot, game_state: dict | None = None, context: dict | None = None, phase: str | None = None) -> dict[str, float]:
     state = game_state or {}; context = context or {}
-
     if phase == "PREGAME":
         raw = pregame_score(f)
         return {"competitiveness": clamp(f.outcome_uncertainty), "game_quality": clamp(f.performance_quality), "team_quality": clamp(f.team_quality), "stakes": clamp(f.stakes), "drama": 0.0, "raw_score": round(raw, 2), "game_score": round(raw, 2)}
@@ -44,6 +43,13 @@ def score_features(f: FeatureSnapshot, game_state: dict | None = None, context: 
     elif margin < 35 and uncertainty < 25 and f.late_game_pressure > 50: calibrated = min(calibrated, 35.0)
     if abs(state.get("home_score", 0) - state.get("away_score", 0)) >= 14 and state.get("quarter", 1) <= 2: calibrated = min(calibrated, 55.0)
     if points <= 3 and f.late_game_pressure > 50: calibrated = min(calibrated, 70.0)
+
+    # The final few seconds of fourth-and-goal is the canonical "this play can
+    # decide the game" state. The feature layer establishes the state; this
+    # small display-scale bonus gives the 95-100 band enough resolution.
+    if state.get("down") == 4 and state.get("field_position_yards_to_goal") is not None and state.get("field_position_yards_to_goal") <= 5 and state.get("seconds_remaining", 3600) <= 30:
+        calibrated = clamp(calibrated + 2.0)
+
     if context.get("game_stage") in {"SUPER_BOWL", "NCAA_NATIONAL_CHAMPIONSHIP"} and competitiveness >= 70: calibrated = clamp(calibrated + 1.5)
 
     return {"competitiveness": clamp(competitiveness), "game_quality": clamp(game_quality), "team_quality": clamp(f.team_quality), "stakes": clamp(f.stakes), "drama": clamp(drama), "raw_score": clamp(raw), "game_score": round(clamp(calibrated), 2)}
