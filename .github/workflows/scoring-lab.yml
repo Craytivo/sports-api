@@ -18,17 +18,17 @@ jobs:
           python-version: '3.12'
       - name: Run diagnostics
         continue-on-error: true
-        run: python -m simulator.diagnostics
+        run: python -m simulator.diagnostics > diagnostics.log 2>&1 || true
       - name: Run controlled sweeps
         continue-on-error: true
-        run: python -m simulator.sweeps
+        run: python -m simulator.sweeps > sweeps.log 2>&1 || true
       - name: Run regression suite
         continue-on-error: true
-        run: python -m simulator.run_regression
+        run: python -m simulator.run_regression > regression.log 2>&1 || true
       - name: Print scoring lab reports
         if: always()
         run: |
-          for f in diagnostic-report.json sweep-report.json regression-report.json; do
+          for f in diagnostics.log sweeps.log regression.log diagnostic-report.json sweep-report.json regression-report.json; do
             if [ -f "$f" ]; then
               echo "===== $f ====="
               cat "$f"
@@ -43,6 +43,9 @@ jobs:
           name: scoring-lab-reports
           if-no-files-found: warn
           path: |
+            diagnostics.log
+            sweeps.log
+            regression.log
             diagnostic-report.json
             sweep-report.json
             regression-report.json
@@ -51,18 +54,16 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p lab
-          for f in diagnostic-report.json sweep-report.json regression-report.json; do
+          for f in diagnostics.log sweeps.log regression.log diagnostic-report.json sweep-report.json regression-report.json; do
             if [ -f "$f" ]; then cp "$f" "lab/$f"; fi
           done
-          if [ -d lab ] && [ "$(ls -A lab 2>/dev/null)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git fetch origin scoring-lab-reports:scoring-lab-reports || true
-            git checkout scoring-lab-reports || git checkout --orphan scoring-lab-reports
-            git add lab
-            git commit -m "Update scoring lab report" || true
-            git push origin scoring-lab-reports
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin scoring-lab-reports:scoring-lab-reports || true
+          git checkout scoring-lab-reports || git checkout --orphan scoring-lab-reports
+          git add lab
+          git commit -m "Update scoring lab report" || true
+          git push origin scoring-lab-reports
       - name: Enforce regression result
         if: always()
         run: |
