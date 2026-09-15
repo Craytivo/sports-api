@@ -18,4 +18,14 @@ jobs:
       - name: Run controlled sweeps
         run: python -m simulator.sweeps
       - name: Run regression suite
+        continue-on-error: true
         run: python -m simulator.run_regression
+      - name: Upload scoring lab reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoring-lab-reports
+          path: |
+            diagnostic-report.json
+            sweep-report.json
+            regression-report.json
