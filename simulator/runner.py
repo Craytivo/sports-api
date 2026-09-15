@@ -11,14 +11,14 @@ DEFAULT_FIXTURES = ROOT / "tests" / "fixtures" / "football_anchors_v1.json"
 
 def _pairwise_tests(ids: set[str]):
     pairs = [
-        ("PAIR-001", "NFL-LIVE-C01", "NFL-LIVE-D01", "Late close must outrank early close"),
-        ("PAIR-002", "NFL-LIVE-F01", "NFL-LIVE-E01", "Late one-score must outrank early one-score"),
-        ("PAIR-003", "NFL-LIVE-J01", "NFL-LIVE-K01", "Weak-team thriller must outrank elite blowout"),
-        ("PAIR-004", "NFL-LIVE-N01", "NFL-LIVE-O01", "Competitive defensive thriller must beat noncompetitive shootout"),
-        ("PAIR-005", "NFL-LIVE-W01", "NFL-LIVE-V01", "Real comeback path must beat dead state"),
-        ("PAIR-006", "NFL-LIVE-I01", "NFL-LIVE-K01", "Blowout must not outrank extraordinary thriller"),
-        ("PAIR-007", "NFL-LIVE-H01", "NFL-LIVE-D01", "Low-probability comeback should rank below live one-score game"),
-        ("PAIR-008", "NFL-LIVE-Y01", "NFL-LIVE-X01", "Fourth-down leverage must matter"),
+        ("PAIR-001", "NFL-LIVE-D01", "NFL-LIVE-C01", "Late close must outrank early close"),
+        ("PAIR-002", "NFL-LIVE-E01", "NFL-LIVE-F01", "Late one-score must outrank early one-score"),
+        ("PAIR-003", "NFL-LIVE-K01", "NFL-LIVE-J01", "Weak-team thriller must outrank elite blowout"),
+        ("PAIR-004", "NFL-LIVE-O01", "NFL-LIVE-N01", "Competitive defensive thriller must beat noncompetitive shootout"),
+        ("PAIR-005", "NFL-LIVE-V01", "NFL-LIVE-W01", "Real comeback path must beat dead state"),
+        ("PAIR-006", "NFL-LIVE-K01", "NFL-LIVE-I01", "Blowout must not outrank extraordinary thriller"),
+        ("PAIR-007", "NFL-LIVE-D01", "NFL-LIVE-H01", "Low-probability comeback should rank below live one-score game"),
+        ("PAIR-008", "NFL-LIVE-X01", "NFL-LIVE-Y01", "Fourth-down leverage must matter"),
     ]
     return [{"id": i, "a": a, "b": b, "relation": ">", "reason": r, "severity": "CRITICAL"} for i, a, b, r in pairs if a in ids and b in ids]
 
