@@ -60,22 +60,13 @@ def competitive_history(history: dict[str, Any]) -> float:
 
 
 def synthetic_wp(state: dict[str, Any], teams: dict[str, Any]) -> float:
-    """Transparent lab WP approximation; production WP will be provider/model supplied.
-
-    The approximation uses the same inputs our feature model is designed around:
-    score margin, regulation time remaining, possession, field position, and team
-    strength.  The time transformation deliberately makes a lead matter more as
-    the clock expires without making a close late game automatically certain.
-    """
+    """Transparent lab WP approximation; production WP will be provider/model supplied."""
     if "home_win_probability" in state:
         return float(state["home_win_probability"])
 
     diff = state.get("home_score", 0) - state.get("away_score", 0)
     remaining = regulation_seconds_remaining(state)
     minutes = remaining / 60.0
-
-    # Scoring uncertainty shrinks as the game approaches the end.  Keep the
-    # scale deliberately conservative because this is a synthetic lab model.
     scale = max(1.8, 2.5 * (minutes + 1.0) ** 0.55)
     home_logit = float(diff)
 
@@ -86,28 +77,17 @@ def synthetic_wp(state: dict[str, Any], teams: dict[str, Any]) -> float:
 
     field = state.get("field_position_yards_to_goal")
     if field is not None and state.get("possession") in {"HOME", "AWAY"}:
-        # Being in scoring territory materially changes the current drive state,
-        # but field position must not overwhelm the scoreboard.
         field_bonus = (50.0 - float(field)) / 25.0
-        if state.get("possession") == "HOME":
-            home_logit += field_bonus
-        else:
-            home_logit -= field_bonus
+        home_logit += field_bonus if state.get("possession") == "HOME" else -field_bonus
 
-    strength = (
+    home_logit += (
         teams.get("home_strength", 50) - teams.get("away_strength", 50)
     ) / 35.0
-    home_logit += strength
 
-    # Fourth down at short distance is a meaningful live-state signal.  It is
-    # intentionally modest here; the competitive-state feature handles leverage.
     if state.get("down") == 4 and state.get("distance") is not None:
         distance = float(state.get("distance", 10))
         down_bonus = max(0.0, 1.5 - 0.25 * max(0.0, distance - 1.0))
-        if state.get("possession") == "HOME":
-            home_logit += down_bonus
-        elif state.get("possession") == "AWAY":
-            home_logit -= down_bonus
+        home_logit += down_bonus if state.get("possession") == "HOME" else -down_bonus
 
     return 1.0 / (1.0 + math.exp(-home_logit / scale))
 
@@ -125,7 +105,6 @@ def comeback_potential(state: dict[str, Any], home_wp: float) -> float:
     value = 100.0 * trailing_win_probability(state, home_wp)
     field = state.get("field_position_yards_to_goal")
     if field is not None and state.get("possession") in {"HOME", "AWAY"}:
-        # Field position matters most when the trailing side owns the ball.
         value += (100.0 - float(field)) * 0.15
     if state.get("down") == 4:
         value += 10.0
@@ -219,6 +198,17 @@ def calculate_features(scenario: dict[str, Any]) -> FeatureSnapshot:
         + 0.10 * comeback
     )
 
+    # A final-minute fourth-and-goal is a distinct competitive state: the
+    # current play can immediately decide the game. This is state leverage,
+    # not a team-quality or stakes bonus.
+    if (
+        state.get("down") == 4
+        and field is not None
+        and field <= 5
+        and state.get("seconds_remaining", 3600) <= 30
+    ):
+        state_pressure = clamp(state_pressure + 20.0)
+
     margin_state = 0.55 * recovered_margin(
         state.get("home_score", 0) - state.get("away_score", 0), late
     ) + 0.45 * state_pressure
@@ -254,6 +244,8 @@ def calculate_features(scenario: dict[str, Any]) -> FeatureSnapshot:
         + 0.15 * rivalry.get(context.get("rivalry", "NONE"), 0)
         + 0.05 * (100 if context.get("historical_context") not in {None, "NONE"} else 0)
     )
+    if context.get("game_stage") in {"SUPER_BOWL", "NCAA_NATIONAL_CHAMPIONSHIP"}:
+        stakes = max(stakes, 100.0)
 
     wp_vol = clamp(sum(abs(e.get("wp_change", 0)) for e in events) * 100)
     recent = clamp(sum(e.get("points", 0) for e in events[-3:]) * 8)
