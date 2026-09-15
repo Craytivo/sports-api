@@ -1,27 +1,17 @@
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from simulator.features import FeatureSnapshot, calculate_features
-from simulator.scorer import score_features, MODEL_VERSION
+from simulator.scorer import MODEL_VERSION, score_features
 
 from .models import CanonicalGame
 
 
-@dataclass
-class ScoreResult:
-    game_id: str
-    game_score: float
-    model_version: str
-    phase: str
-    features: dict[str, float]
-    components: dict[str, float]
-
-
-# Production entry point. The frozen lab model remains the behavioral oracle
-# until the production feature engine is independently extracted and parity-
-# tested. This adapter deliberately accepts only the canonical game contract.
+# Production boundary for the frozen V1 scoring contract.
+# The simulator remains the behavioral oracle during the integration phase;
+# this entry point accepts only the canonical game model so providers never
+# couple directly to scoring internals.
 def score_game(game: CanonicalGame) -> dict[str, Any]:
     features: FeatureSnapshot = calculate_features(game.scoring_input())
     scored = score_features(
