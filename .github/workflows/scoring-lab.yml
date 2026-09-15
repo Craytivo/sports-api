@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   scoring-lab:
     runs-on: ubuntu-latest
@@ -43,6 +46,23 @@ jobs:
             diagnostic-report.json
             sweep-report.json
             regression-report.json
+      - name: Persist latest report for inspection
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p lab
+          for f in diagnostic-report.json sweep-report.json regression-report.json; do
+            if [ -f "$f" ]; then cp "$f" "lab/$f"; fi
+          done
+          if [ -d lab ] && [ "$(ls -A lab 2>/dev/null)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git fetch origin scoring-lab-reports:scoring-lab-reports || true
+            git checkout scoring-lab-reports || git checkout --orphan scoring-lab-reports
+            git add lab
+            git commit -m "Update scoring lab report" || true
+            git push origin scoring-lab-reports
+          fi
       - name: Enforce regression result
         if: always()
         run: |
