@@ -59,11 +59,9 @@ jobs:
           done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin scoring-lab-reports:scoring-lab-reports || true
-          git checkout scoring-lab-reports || git checkout --orphan scoring-lab-reports
           git add lab
           git commit -m "Update scoring lab report" || true
-          git push origin scoring-lab-reports
+          git push origin HEAD:refs/heads/scoring-lab-reports --force
       - name: Enforce regression result
         if: always()
         run: |
