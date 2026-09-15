@@ -60,11 +60,27 @@ class ESPNProvider:
         elif phase == "FINAL":
             period, clock = 4, 0
 
+        situation = competition.get("situation") or {}
         state_obj = GameState(
             quarter=period,
             seconds_remaining=clock,
             home_score=self._score(home),
             away_score=self._score(away),
+            possession=self._possession(situation, home, away),
+            down=self._int_or_none(situation.get("down")),
+            distance=self._float_or_none(situation.get("distance")),
+            field_position_yards_to_goal=self._float_or_none(
+                situation.get("yardLine")
+                if situation.get("yardLine") is not None
+                else situation.get("yardLineNumber")
+            ),
+            home_timeouts=self._int_or_none(situation.get("homeTimeouts")),
+            away_timeouts=self._int_or_none(situation.get("awayTimeouts")),
+            home_win_probability=self._float_or_none(
+                situation.get("homeWinPercentage")
+                if situation.get("homeWinPercentage") is not None
+                else situation.get("homeWinProbability")
+            ),
         )
         context = GameContext(game_stage=self._game_stage(event, sport))
         return CanonicalGame(
@@ -106,6 +122,32 @@ class ESPNProvider:
             return max(0, int(minutes) * 60 + int(float(seconds)))
         except (ValueError, TypeError):
             return 0
+
+    @staticmethod
+    def _int_or_none(value: object) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _float_or_none(value: object) -> float | None:
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _possession(cls, situation: dict, home: dict, away: dict) -> str | None:
+        possession = situation.get("possession")
+        if possession is None:
+            return None
+        possession = str(possession)
+        if possession in {str(home.get("id")), str(home.get("team", {}).get("id"))}:
+            return "home"
+        if possession in {str(away.get("id")), str(away.get("team", {}).get("id"))}:
+            return "away"
+        return possession
 
     @staticmethod
     def _game_stage(event: dict, sport: Sport) -> str:
