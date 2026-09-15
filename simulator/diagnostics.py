@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .features import calculate_features
-from .scorer import score_features
+from .scorer import MODEL_VERSION, score_features
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "football_anchors_v1.json"
@@ -16,7 +16,7 @@ def load_scenarios(path: Path = FIXTURES) -> list[dict[str, Any]]:
 
 def explain(scenario: dict[str, Any]) -> dict[str, Any]:
     features = calculate_features(scenario)
-    components = score_features(features)
+    components = score_features(features, scenario.get("game_state"), scenario.get("context"))
     return {
         "scenario_id": scenario["id"],
         "name": scenario["name"],
@@ -40,7 +40,7 @@ def score_curve(base: dict[str, Any], clocks: list[int]) -> list[dict[str, float
 def main() -> int:
     scenarios = load_scenarios()
     report = {
-        "model_version": "football-lab-v1",
+        "model_version": MODEL_VERSION,
         "anchor_diagnostics": [explain(s) for s in scenarios],
         "late_game_curve": score_curve(
             next(s for s in scenarios if s["id"] == "NFL-LIVE-C01"),
