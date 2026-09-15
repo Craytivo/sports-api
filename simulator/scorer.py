@@ -34,9 +34,11 @@ def score_features(f: FeatureSnapshot, game_state: dict | None = None, context: 
     competitiveness = f.competitiveness
     # A documented comeback arc is itself evidence that the live state is
     # unusually compelling, even before the game reaches the late-game window.
+    # Use the already-derived history feature so the scorer remains decoupled
+    # from raw scenario history and the canonical FeatureSnapshot remains the
+    # source of scoring inputs.
     if phase != "FINAL":
-        comeback_events = min(3, int((state.get("comeback_events") or 0)))
-        competitiveness = clamp(competitiveness + 0.35 * comeback_events)
+        competitiveness = clamp(competitiveness + min(1.0, 0.04 * f.competitive_history))
     if phase == "FINAL" and f.competitive_history >= 40:
         competitiveness = max(competitiveness, 70.0)
 
