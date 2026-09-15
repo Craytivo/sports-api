@@ -1,6 +1,7 @@
 from production.ingestion import GameIngestion
 from production.models import CanonicalGame
 from production.providers import ESPNProvider
+from production.ratings import TeamRating, apply_team_ratings
 from production.scoring import score_game
 
 
@@ -29,6 +30,15 @@ def _espn_event() -> dict:
                     "displayClock": "2:30",
                     "type": {"name": "STATUS_IN_PROGRESS", "completed": False},
                 },
+                "situation": {
+                    "possession": "1",
+                    "down": 4,
+                    "distance": 1,
+                    "yardLine": 5,
+                    "homeTimeouts": 2,
+                    "awayTimeouts": 1,
+                    "homeWinPercentage": 0.72,
+                },
             }
         ],
     }
@@ -46,6 +56,13 @@ def test_espn_adapter_returns_canonical_game_without_provider_fields():
     assert game.state.away_score == 21
     assert game.state.quarter == 4
     assert game.state.seconds_remaining == 150
+    assert game.state.possession == "home"
+    assert game.state.down == 4
+    assert game.state.distance == 1
+    assert game.state.field_position_yards_to_goal == 5
+    assert game.state.home_timeouts == 2
+    assert game.state.away_timeouts == 1
+    assert game.state.home_win_probability == 0.72
     assert not hasattr(game, "competitors")
 
 
@@ -65,3 +82,18 @@ def test_ingestion_and_scoring_use_only_canonical_contract():
     assert result["game_id"] == "test-espn-1"
     assert 0 <= result["game_score"] <= 100
     assert result["model_version"]
+
+
+def test_team_ratings_enrich_canonical_games_without_changing_scoring_contract():
+    provider = ESPNProvider()
+    game = provider._game_from_event(_espn_event(), "NFL", "2026-09-15T00:00:00+00:00")
+    ratings = {
+        "1": TeamRating("1", 80.0, "test-ratings", 2026),
+        "2": TeamRating("2", 40.0, "test-ratings", 2026),
+    }
+    enriched = apply_team_ratings((game,), ratings)[0]
+
+    assert enriched.home.strength == 80.0
+    assert enriched.away.strength == 40.0
+    assert enriched.state == game.state
+    assert score_game(enriched)["model_version"] == score_game(game)["model_version"]
