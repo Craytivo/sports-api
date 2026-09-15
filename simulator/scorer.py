@@ -1,7 +1,7 @@
 from __future__ import annotations
 from .features import FeatureSnapshot, clamp
 
-MODEL_VERSION = "football-lab-v1.6"
+MODEL_VERSION = "football-lab-v1.7"
 
 
 def calibrate(raw: float, competitiveness: float) -> float:
@@ -16,7 +16,10 @@ def calibrate(raw: float, competitiveness: float) -> float:
 def pregame_score(f: FeatureSnapshot) -> float:
     matchup_quality = 100.0 * (f.team_quality / 100.0) ** 1.9
     expected_competitiveness = matchup_quality * (0.40 + 0.60 * f.outcome_uncertainty / 100.0)
-    raw = 0.40 * expected_competitiveness + 0.25 * f.team_quality + 0.20 * f.stakes + 0.15 * f.performance_quality
+    # Pregame has no observed performance yet. Use a team-quality-derived
+    # expectation instead of the live-game performance baseline.
+    expected_game_quality = clamp(30.0 + 0.55 * f.team_quality)
+    raw = 0.40 * expected_competitiveness + 0.25 * f.team_quality + 0.20 * f.stakes + 0.15 * expected_game_quality
     if f.team_quality > 80 and f.outcome_uncertainty > 80: raw += 2.0
     return clamp(raw)
 
